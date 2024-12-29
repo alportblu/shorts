@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/scripts.js') }}" defer></script>
+    <title>YouTube Shorts Generator</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+    /* Adicionar ao CSS existente */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0,0,0,0.8);
+    }
+
+    .modal-content {
+        background-color: var(--bg-secondary);
+        color: var(--text-color);
+        margin: 5% auto;
+        padding: 20px;
+        border-radius: 10px;
+        width: 90%;
+        max-width: 1200px;
+        max-height: 90vh;
+        overflow-y: auto;
+        border: 1px solid var(--border-color);
+    }
+
+    .close {
+        color: var(--text-color);
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+
+    .close:hover {
+        color: var(--accent-color);
+    }
+
+    .shorts-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .short-card {
+        background: var(--bg-primary);
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+    }
+
+    .short-card h3 {
+        color: var(--text-color);
+        margin-bottom: 15px;
+        text-align: center;
+    }
+
+    .video-preview {
+        width: 100%;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+
+    .buttons-container {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+    }
+
+    .btn {
+        padding: 8px 15px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: opacity 0.2s;
+    }
+
+    .download-btn {
+        background: #4CAF50;
+        color: white;
+    }
+
+    .delete-btn {
+        background: #f44336;
+        color: white;
+    }
+
+    #thumbnail-container {
+        display: flex;
+        justify-content: center;
+        margin: 20px 0;
+        width: 100%;
+    }
+
+    #thumbnail {
+        max-width: 480px; /* ou o tamanho que preferir */
+        width: 100%;
+        height: auto;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        border: 1px solid var(--border-color);
+    }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>YouTube Shorts Generator</h1>
+        
+        <div id="error" class="error" style="display: none;">
+            <span class="error-message"></span>
+            <button onclick="resetStatus()" class="reset-button">Try Again</button>
+        </div>
+        
+        <form id="videoForm" method="POST">
+            <div class="form-group">
+                <label for="youtube_url">YouTube URL</label>
+                <input type="text" id="youtube_url" name="youtube_url" required 
+                       placeholder="https://www.youtube.com/watch?v=...">
+            </div>
+            
+            <div id="thumbnail-container" style="display: none;">
+                <img id="thumbnail" src="" alt="Video Thumbnail" style="max-width: 100%; height: auto;">
+            </div>
+
+            <div class="form-group">
+                <label for="api_key">OpenAI API Key</label>
+                <input type="text" id="api_key" name="api_key" required
+                       placeholder="sk-...">
+            </div>
+            
+            <button type="submit" id="submitBtn">Generate Shorts</button>
+        </form>
+        
+        <div id="loader" style="display: none;">
+            <div class="loader-content">
+                <div class="coffee-animation">
+                    <i class="fas fa-mug-hot"></i>
+                    <h3 class="typing-text">Time for a coffee break!</h3>
+                    <p>This process usually takes 2-10 minutes.</p>
+                    <p>We're working our magic to create amazing shorts for you!</p>
+                </div>
+                <div class="progress-section">
+                    <p id="loaderText">Processing, please wait...</p>
+                    <progress id="progressBar" value="0" max="100"></progress>
+                </div>
+            </div>
+        </div>
+
+        <div id="shortsModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <h2>Seus Shorts Estão Prontos!</h2>
+                <div class="shorts-grid" id="shortsGrid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    let processId = null;
+    let statusCheckInterval = null;
+
+    function startProcessing(event) {
+        event.preventDefault();
+        
+        const form = document.getElementById('videoForm');
+        const formData = new FormData(form);
+        
+        // Esconder o formulário e mostrar o loader
+        document.getElementById('videoForm').style.display = 'none';
+        document.getElementById('loader').style.display = 'block';
+        document.getElementById('error').style.display = 'none';
+        document.getElementById('submitBtn').disabled = true;
+        
+        fetch('/process', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) throw new Error(data.error);
+            processId = data.process_id;
+            // Iniciar checagem imediata
+            checkStatus();
+            // Configurar intervalo para checagens subsequentes
+            statusCheckInterval = setInterval(checkStatus, 1000);
+        })
+        .catch(error => {
+            // Em caso de erro, mostrar o formulário novamente
+            document.getElementById('videoForm').style.display = 'block';
+            document.getElementById('loader').style.display = 'none';
+            showError(error.message);
+            document.getElementById('submitBtn').disabled = false;
+        });
+    }
+
+    // Adicionar event listener ao form
+    document.getElementById('videoForm').addEventListener('submit', startProcessing);
+
+    function showShortsModal(shorts) {
+        const modal = document.getElementById('shortsModal');
+        const grid = document.getElementById('shortsGrid');
+        grid.innerHTML = '';
+        
+        shorts.forEach((short, index) => {
+            const card = document.createElement('div');
+            card.className = 'short-card';
+            card.id = `card-${short}`;
+            card.innerHTML = `
+                <h3>Short #${index + 1}</h3>
+                <video class="video-preview" controls>
+                    <source src="/shorts/${short}" type="video/mp4">
+                </video>
+                <div class="buttons-container">
+                    <a href="/shorts/${short}" download class="btn download-btn">Download</a>
+                    <button onclick="deleteShort('${short}')" class="btn delete-btn">Delete</button>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+        
+        modal.style.display = 'block';
+        
+        // Fechar modal quando clicar no X
+        const closeBtn = modal.querySelector('.close');
+        closeBtn.onclick = () => modal.style.display = 'none';
+        
+        // Fechar modal quando clicar fora
+        window.onclick = (event) => {
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+    }
+
+    function deleteShort(filename) {
+        if (confirm('Are you sure you want to delete this short?')) {
+            fetch(`/delete-short/${filename}`, {
+                method: 'DELETE'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById(`card-${filename}`).remove();
+                    // Se não houver mais shorts, fechar o modal
+                    if (document.getElementById('shortsGrid').children.length === 0) {
+                        document.getElementById('shortsModal').style.display = 'none';
+                    }
+                } else {
+                    alert('Error deleting short');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting short');
+            });
+        }
+    }
+
+    function checkStatus() {
+        if (!processId) {
+            console.debug('No process ID available');
+            return;
+        }
+        
+        fetch(`/status/${processId}`)
+            .then(response => {
+                if (!response.ok) {
+                    // Ignorar silenciosamente erros específicos
+                    if (response.status === 404 && 
+                        (response.url.endsWith('/status') || response.url.includes('undefined'))) {
+                        return Promise.resolve(null);
+                    }
+                    throw new Error(response.status === 404 ? 'Processo não encontrado' : 'Erro ao verificar status');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (!data) return;
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Manter o loader visível e atualizar o progresso
+                document.getElementById('loader').style.display = 'block';
+                document.getElementById('videoForm').style.display = 'none';
+                document.getElementById('loaderText').textContent = data.step;
+                document.getElementById('progressBar').value = data.progress;
+                
+                if (data.step === "Process completed") {
+                    clearInterval(statusCheckInterval);
+                    if (data.shorts_paths && data.shorts_paths.length > 0) {
+                        showShortsModal(data.shorts_paths);
+                    }
+                    // Restaurar interface apenas após completar
+                    document.getElementById('videoForm').style.display = 'block';
+                    document.getElementById('loader').style.display = 'none';
+                    document.getElementById('submitBtn').disabled = false;
+                }
+                
+                if (data.step === "Error") {
+                    clearInterval(statusCheckInterval);
+                    document.getElementById('videoForm').style.display = 'block';
+                    document.getElementById('loader').style.display = 'none';
+                    showError(data.error || 'Erro ao processar vídeo');
+                    document.getElementById('submitBtn').disabled = false;
+                }
+            })
+            .catch(error => {
+                // Lista de erros para ignorar
+                const ignoredErrors = [
+                    'Failed to check status',
+                    'Failed to fetch',
+                    'Process not found',
+                    'status/undefined'
+                ];
+                
+                // Se for um erro para ignorar, retornar silenciosamente
+                if (ignoredErrors.some(err => error.message.toLowerCase().includes(err.toLowerCase()))) {
+                    return;
+                }
+                
+                console.error('Status check error:', error);
+                clearInterval(statusCheckInterval);
+                document.getElementById('videoForm').style.display = 'block';
+                document.getElementById('loader').style.display = 'none';
+                showError(error.message);
+                document.getElementById('submitBtn').disabled = false;
+            });
+    }
+
+    function showError(message) {
+        // Lista de erros para ignorar
+        const ignoredErrors = [
+            'Failed to check status',
+            'Failed to fetch',
+            'Process not found',
+            'status/undefined'
+        ];
+        
+        // Verificar se a mensagem contém algum dos erros para ignorar
+        const shouldIgnore = ignoredErrors.some(err => 
+            message.toLowerCase().includes(err.toLowerCase())
+        );
+        
+        // Se for um erro para ignorar, apenas logar no console
+        if (shouldIgnore) {
+            console.debug('Ignored error:', message);
+            return;
+        }
+        
+        // Se não for para ignorar, mostrar o erro
+        const errorDiv = document.getElementById('error');
+        const errorMessage = errorDiv.querySelector('.error-message');
+        if (errorMessage) {
+            errorMessage.textContent = message;
+        } else {
+            errorDiv.textContent = message;
+        }
+        errorDiv.style.display = 'block';
+    }
+
+    document.getElementById('youtube_url').addEventListener('input', function(e) {
+        const url = e.target.value;
+        const videoId = extractVideoId(url);
+        const thumbnailContainer = document.getElementById('thumbnail-container');
+        
+        if (videoId) {
+            const thumbnailUrl = `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
+            document.getElementById('thumbnail').src = thumbnailUrl;
+            thumbnailContainer.style.display = 'flex';
+        } else {
+            thumbnailContainer.style.display = 'none';
+        }
+    });
+
+    function extractVideoId(url) {
+        const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[7].length == 11) ? match[7] : false;
+    }
+    </script>
+</body>
+</html>

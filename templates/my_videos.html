@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meus Vídeos Salvos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Meus Vídeos Salvos</h1>
+        <div class="videos-grid">
+            {% for video in videos %}
+            <div class="video-card">
+                <h3>{{ video.title }}</h3>
+                <video controls>
+                    <source src="{{ video.video_path }}" type="video/mp4">
+                </video>
+                <div class="buttons">
+                    <a href="{{ video.video_path }}" download class="download-btn">Download</a>
+                    <button onclick="deleteVideo('{{ video.id }}')" class="delete-btn">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html> 
