@@ -10,6 +10,7 @@ from utils.cut_video import cut_video_with_smart_frame  # Importando a função 
 from dotenv import load_dotenv
 import threading
 import logging
+import shutil
 import moviepy.editor as mp
 from utils.file_manager import FileManager
 from threading import Lock
