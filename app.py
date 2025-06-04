@@ -59,6 +59,7 @@ def register():
             
             user_manager.add_user(username, email, password)
             session['username'] = username
+            session['user_id'] = username  # store user id for saved videos
             return redirect(url_for('index'))
         except ValueError as e:
             return render_template('register.html', error=str(e))
@@ -74,6 +75,7 @@ def login():
         user = user_manager.authenticate(username, password)
         if user:
             session['username'] = username
+            session['user_id'] = username  # store user id for saved videos
             return redirect(url_for('index'))
             
         return render_template('login.html', error="Invalid username or password")
@@ -83,6 +85,7 @@ def login():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('user_id', None)
     return redirect(url_for('login'))
 
 @app.route("/")
