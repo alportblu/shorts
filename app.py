@@ -59,6 +59,8 @@ def register():
             
             user_manager.add_user(username, email, password)
             session['username'] = username
+            # Usamos o próprio nome de usuário como identificador
+            session['user_id'] = username
             return redirect(url_for('index'))
         except ValueError as e:
             return render_template('register.html', error=str(e))
@@ -74,6 +76,8 @@ def login():
         user = user_manager.authenticate(username, password)
         if user:
             session['username'] = username
+            # Também gravamos user_id para outras rotas
+            session['user_id'] = username
             return redirect(url_for('index'))
             
         return render_template('login.html', error="Invalid username or password")
@@ -83,6 +87,7 @@ def login():
 @app.route('/logout')
 def logout():
     session.pop('username', None)
+    session.pop('user_id', None)
     return redirect(url_for('login'))
 
 @app.route("/")
@@ -334,7 +339,8 @@ def reset():
 def save_video():
     video_path = request.form.get("video_path")
     title = request.form.get("title")
-    user_id = session['user_id']
+    # Recupera o identificador do usuário da sessão
+    user_id = session.get('user_id')
     
     saved_video = SavedVideo(user_id, video_path, title, datetime.now())
     db.save_video(saved_video)
@@ -344,7 +350,8 @@ def save_video():
 @app.route("/my-videos")
 @login_required
 def my_videos():
-    user_id = session['user_id']
+    # Recupera o identificador do usuário da sessão
+    user_id = session.get('user_id')
     saved_videos = db.get_user_videos(user_id)
     return render_template("my_videos.html", videos=saved_videos)
 
